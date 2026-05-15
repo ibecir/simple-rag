@@ -1,0 +1,6 @@
+psycopg2-binary
+pgvector
+ollama
+pypdf
+pdfplumber
+numpy
