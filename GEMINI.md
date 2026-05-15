@@ -32,13 +32,25 @@ The system follows a standard RAG pipeline, optimized with **Hybrid Search** (Ve
     - **GIN Index**: For fast keyword/full-text search.
 
 ### Phase B: Retrieval & Generation (`python rag.py`)
-1. **Hybrid Search**: When a user asks a question:
-    - **Vector Search**: Finds the top 20 chunks by cosine similarity.
-    - **Keyword Search**: Finds the top 20 chunks using BM25-like ranking (`ts_rank_cd`).
-    - **Re-ranking**: Results are combined and ranked based on a composite score.
-2. **Context Construction**: The top-K chunks are bundled into a prompt.
-3. **Generation**: Ollama's `llama3.2` generates a response restricted to the provided context.
-4. **Output**: The answer is printed with source citations (e.g., `vector-database.pdf (Page 5)`).
+1. **Hybrid Search**: When a user asks a question, the system performs a dual-path search:
+    - **Vector Search (ANN)**: Uses **HNSW** (Hierarchical Navigable Small World) for fast approximate nearest neighbor search via `pgvector`. It calculates cosine similarity (`1 - <=>`).
+    - **Keyword Search**: Uses a **GIN Index** on a `tsvector` column. Ranking is performed using PostgreSQL's `ts_rank_cd` (Cover Density).
+2. **Weighted Re-ranking**: Results from both paths are combined using a weighted scoring system to prioritize semantic relevance:
+    - **Vector Weight (70%)**: Multiplied by `0.7` to ensure semantic intent is the primary driver.
+    - **Keyword Weight (30%)**: Multiplied by `0.3` to allow exact technical terms to influence ranking without overwhelming the semantic context.
+    - **Logic**: `(VectorScore * 0.7) + (KeywordScore * 0.3)`.
+3. **Context Construction**: The top-K chunks are bundled into a prompt.
+4. **Generation**: Ollama's `llama3.2` generates a response restricted to the provided context.
+5. **Output**: The answer is printed with source citations (e.g., `vector-database.pdf (Page 5)`).
+
+---
+
+## Technical Decisions & Architecture
+
+### Indexing & Search
+- **pgvector vs. FAISS**: We use `pgvector` for its seamless integration with PostgreSQL. This allows us to perform both vector and keyword searches in a single ACID-compliant database, avoiding the complexity of syncing data between a relational DB and a separate vector store like FAISS.
+- **HNSW Indexing**: Chosen over IVFFlat for its superior performance and recall on high-dimensional data (768 dimensions), even though it requires more memory.
+- **Hybrid Weighting (70:30)**: Standard RAG systems often struggle with pure vector search in technical domains where specific keywords (e.g., "pg_hba.conf") are critical. The 70:30 split ensures semantic understanding is dominant while preserving the precision of exact technical identifiers.
 
 ---
 

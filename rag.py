@@ -164,7 +164,7 @@ def query_rag(query, top_k=5):
         SELECT 
             COALESCE(v.content, k.content) as content,
             COALESCE(v.metadata, k.metadata) as metadata,
-            COALESCE(v.similarity, 0) + COALESCE(k.rank, 0) as score
+            (COALESCE(v.similarity, 0) * 0.7) + (COALESCE(k.rank, 0) * 0.3) as score
         FROM vector_search v
         FULL OUTER JOIN keyword_search k ON v.id = k.id
         ORDER BY score DESC
